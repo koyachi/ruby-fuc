@@ -1,43 +1,67 @@
 # -*- coding: utf-8 -*-
 module Fuc
-  class URLEntry
-    DEFAULT_TYPE = 'normal'
-    attr_accessor :url, :via, :type
-
-    def initialize(url, via, type=DEFAULT_TYPE)
-      @url = url
-      @via = via
-      @type = type
-    end
-  end
-
   class URLQueue
     def initialize
-      @slot = {}
       @current_slot = 0
-      @host_index = []
+      @queue = Bundle.first_or_create(:title => 'queue')
+      _make_slotid_list
+    end
+
+    def _make_slotid_list
+      @slot_ids = @queue.tags.map {|t| t.id}
+      p @slot_ids
+    end
+
+    def _add_slotid(slot)
+      @slot_ids.push(slot.id)
     end
 
     def push(url_entry)
-      host = URI.split(url_entry.url)[2]
-      @slot[host] = [] if @slot[host].nil?
-      @slot[host].push(url_entry)
-      unless @host_index.include? host then
-        @host_index.push host
+      host = URI.split(url_entry.url.to_s)[2]
+      slot = @queue.tags.first(:title => host)
+      unless slot then
+        p "create Tag #{host}"
+        slot = Tag.create(:title => host)
+        @queue.tags << slot
+        @queue.save
+        _add_slotid(slot)
       end
+      slot.entries << url_entry
+      slot.save
     end
 
     def _pop_one
-      host = @host_index[@current_slot]
-      url_entry = @slot[host].pop || nil
-      @host_index.delete host if url_entry == nil
-      @current_slot = (@current_slot < @host_index.length - 1) ? @current_slot + 1 : 0
+      Entry.first(:checked => false)
+    end
+
+    # FIXME: 優先度低め Fuc.runのループと合わせて見直し
+    def _pop_one_auto
+      url_entry = nil
+      nil_count = 0
+      while url_entry == nil do
+        p "@crrent_slot = #{@current_slot}"
+        host_name = @queue.tags.get(@slot_ids[@current_slot])
+        p host_name
+        host = @queue.tags.first(:title => host_name.title)
+        url_entry = host.entries.first(:checked => false)
+        if url_entry == nil then
+          host.destroy
+          host.save
+          nil_count = nil_count + 1
+          if nil_count == @slot_ids.length then
+            break
+          end
+          next
+        end
+        @current_slot = (@current_slot < @slot_ids.length - 1) ? @current_slot + 1 : 0
+      end
       url_entry
     end
 
     # host毎にプロセス分けて並列処理するようなときはhostsとあわせてこっち使う
     def _pop_by_host(host)
-      @slot[host].pop
+      url_entry = @queue.tags(host).first
+      url_entry
     end
 
     def pop(*args)
@@ -50,64 +74,7 @@ module Fuc
     end
 
     def hosts
-      @slot.keys
-    end
-  end
-
-  class URLCache
-    FILE_PATH = 'url_queue.dump'
-
-    def initialize
-      @@list = []
-      @@checked_at = {}
-      @@response = {}
-      load
-    end
-
-    def push(url, response, expire=0)
-      if find?(url, expire) then
-        @@list.delete url
-        @@checked_at.delete url
-      end
-      @@list.push(url)
-      @@checked_at[url] = Time.now
-      @@response[url] = response
-    end
-
-    def find?(url, expire=0)
-      found = @@list.include?(url)
-      if expire != 0 then
-        (@@checked_at.key?(url)) ? (@@checked_at[url] < expire) ? false : true : false
-      else
-        found
-      end
-    end
-
-    def find(url, expire=0)
-      if find?(url, expire) then
-        @@response[url]
-      else
-        nil
-      end
-    end
-
-    def load
-      return unless File.file? FILE_PATH
-
-      data = ''
-      File.open(FILE_PATH) {|f|
-        data = f.read
-      }
-      tmp = Marshal.load(data)
-      @@list = tmp[:list] || []
-      @@checked_at = tmp[:checked_at] || {}
-    end
-
-    def save
-      data = Marshal.dump({:list => @@list, :checked_at => @@checked_at})
-      File.open(FILE_PATH, 'w') {|f|
-        f.write(data)
-      }
+      @queue.tags.map {|host| host.title}
     end
   end
 end

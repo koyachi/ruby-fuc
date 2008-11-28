@@ -13,6 +13,7 @@ require 'tmpdir'
 require 'digest/md5'
 
 dir = Pathname(__FILE__).dirname.expand_path / 'fuc'
+require dir / 'model'
 require dir / 'queue'
 require dir / 'processer'
 require dir / 'processer' / 'notify_urls_via'
@@ -20,7 +21,7 @@ require dir / 'processer' / 'downloader'
 require dir / 'processer' / 'webservices'
 
 module Fuc
-  VERSION = '0.0.1'
+  VERSION = '0.0.2'
 
   class << self
     cattr_accessor :work_dir
@@ -31,26 +32,29 @@ module Fuc
       Dir.mkdir(self.work_dir) unless File.directory? self.work_dir
     end
 
-    cattr_accessor :url_queue, :url_cache
-    self.url_queue = URLQueue.new
-    self.url_cache = URLCache.new
+    cattr_accessor :url_queue
 
     def run(url)
       setup_workdir
+      # FIXME
+      setup_model
+      self.url_queue = URLQueue.new
+
       if url.instance_of? String then
-        self.url_queue.push(URLEntry.new(url,
-                                         {:url => 'root', :info => ''}))
+        self.url_queue.push(Entry.new(:url => url))
       elsif url.instance_of? Array then
         url.map {|u|
-          self.url_queue.push(URLEntry.new(u,
-                                           {:url => 'root', :info => ''}))
+          self.url_queue.push(Entry.new(:url => url))
         }
       end
       
       while url_entry = self.url_queue.pop() do
         print "%-10s %s\n" % ["pop", url_entry.url]
-        expire = (url_entry.via[:url] == 'root') ? Time.now - 10 * 60 : 0
-        if self.url_cache.find?(url_entry.url, expire) then
+        now = DateTime.now.to_time
+        # FIXME: 直値 -> Config
+        expire = (url_entry.via_url.nil?) ? now : now - 10 * 60
+        # 前回チェックから一定時間が経っていなければスキップ
+        unless url_entry.should_crawl? then
           print "skip\n"
           next
         end
@@ -64,7 +68,7 @@ module Fuc
           host, port, path = uri_parts[2], uri_parts[3],
                              (uri_parts[5] == '') ? '/index.html' : uri_parts[5]
           begin
-            response = self.url_cache.find(url_entry.url)
+            response = url_entry.body
             if response.nil? then
               Net::HTTP.start(host, port) {|http|
                 response = http.head(path)
@@ -74,18 +78,20 @@ module Fuc
                   response = nil
                 end
               }
-              self.url_cache.push(url_entry.url, response)
+              url_entry.body = response
+              url_entry.save
               sleep 1
             end
-            result = p.process(url_entry.url, response, url_entry.via)
+            result = p.process(url_entry)
           rescue Timeout::Error
             print "timeout\n"
           end  
           #break
         end
+        url_entry.checked = true
+        url_entry.save
         print "\n"
       end
-      self.url_cache.save
     end
 
     def output_processer_log(user_class)

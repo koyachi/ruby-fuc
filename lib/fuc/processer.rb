@@ -36,7 +36,8 @@ module Fuc
       false
     end
 
-    def process(url, content, via)
+#    def process(url, content, via)
+    def process(url_entry)
     end
 
     def self.inherited(subclass)
@@ -51,8 +52,18 @@ module Fuc
       @crawler.url_queue.push(*url_entry)
     end
 
-    def push_url(url, via_url, via_info, type='normal')
-      @crawler.url_queue.push(Fuc::URLEntry.new(url, {:url => via_url, :info => via_info}, type))
+    def push_url(url, via_url, summary, tag='text')
+      print "%-10s %s\n" % ["push", url]
+#      @crawler.url_queue.push(Fuc::URLEntry.new(url, {:url => via_url, :info => via_info}, type))
+      # tag, bundle
+      tag = Tag.first_or_create(:title => tag)
+      entry = Entry.new(:url => url,
+                        :via_url => via_url,
+                        :summary => summary)
+      tag.entries << entry
+      tag.save
+      entry.save
+      @crawler.url_queue.push(entry)
     end
 
     # FIXME ダサッ
@@ -81,20 +92,20 @@ module Fuc
     end
   end
 
-  class ContentExtractProcesser < Processer
-    NAME = 'ContentExtractProcesser'
-    DESCRIPTION = 'extract html content'
-
-    def match(url_entry)
-      url_entry.type == 'cotent_extracter'
-    end
-
-    def process(url, content, via)
-      # extract main content
-    end
-
-    def self.inherited(subclass)
-      Fuc.register_process(subclass, false, 'content_extracter')
-    end
-  end
+#  class ContentExtractProcesser < Processer
+#    NAME = 'ContentExtractProcesser'
+#    DESCRIPTION = 'extract html content'
+#
+#    def match(url_entry)
+#      url_entry.tag == 'cotent_extracter'
+#    end
+#
+#    def process(url, content, via)
+#      # extract main content
+#    end
+#
+#    def self.inherited(subclass)
+#      Fuc.register_process(subclass, false, 'content_extracter')
+#    end
+#  end
 end
