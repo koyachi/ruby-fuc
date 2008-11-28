@@ -36,7 +36,6 @@ module Fuc
       false
     end
 
-#    def process(url, content, via)
     def process(url_entry)
     end
 
@@ -54,8 +53,8 @@ module Fuc
 
     def push_url(url, via_url, summary, tag='text')
       print "%-10s %s\n" % ["push", url]
-#      @crawler.url_queue.push(Fuc::URLEntry.new(url, {:url => via_url, :info => via_info}, type))
       # tag, bundle
+      # FIXME: Bundle対応
       tag = Tag.first_or_create(:title => tag)
       entry = Entry.new(:url => url,
                         :via_url => via_url,
@@ -92,20 +91,20 @@ module Fuc
     end
   end
 
-#  class ContentExtractProcesser < Processer
-#    NAME = 'ContentExtractProcesser'
-#    DESCRIPTION = 'extract html content'
-#
-#    def match(url_entry)
-#      url_entry.tag == 'cotent_extracter'
-#    end
-#
-#    def process(url, content, via)
-#      # extract main content
-#    end
-#
-#    def self.inherited(subclass)
-#      Fuc.register_process(subclass, false, 'content_extracter')
-#    end
-#  end
+  class ContentExtractProcesser < Processer
+    NAME = 'ContentExtractProcesser'
+    DESCRIPTION = 'extract html content'
+
+    def match(url_entry)
+      url_entry.tags.first(:title => 'cotent_extracter')
+    end
+
+    def process(url_entry)
+      # extract main content
+    end
+
+    def self.inherited(subclass)
+      Fuc.register_process(subclass, false, 'content_extracter')
+    end
+  end
 end

@@ -4,7 +4,6 @@ class Fuc::Processer
       url
     end
 
-#    def process(url, content, via)
     def process(url_entry)
       download(convert_url(url_entry.url))
       url_entry.checked = true

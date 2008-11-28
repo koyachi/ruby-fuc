@@ -5,58 +5,50 @@ require 'dm-types'
 
 DataMapper.setup(:default, "sqlite3:///#{Dir.pwd}/fuc.db")
 
-# 他のプロセッサからpost_url(url,... 'storage')したものが保存される
-# modelだけ他から使われる可能性おおきいので単独requireできるようにしよう
-module Fuc; end
-#module Fuc::Model
-  def setup_model
-    DataMapper.auto_migrate!
-#    Entry.auto_migrate!
-#    Tag.auto_migrate!
-#    Bundle.auto_migrate!
+def setup_model
+  DataMapper.auto_migrate!
+end
+
+class Entry
+  include DataMapper::Resource
+  include DataMapper::Types
+
+  property :id, Serial
+  property :url, String
+  property :via_url, String
+  property :summary, Text
+  property :body, Object #=>URLCacheのresponseみたいな使い方,
+  property :checked, Boolean, :default => false
+  property :created_at, DateTime, :default => Proc.new {|r,p| DateTime.now}
+
+  has n, :tags, :through => Resource
+
+  def should_crawl?
+    !self.checked || self.created_at.to_time < DateTime.now.to_time - 10 * 60
   end
+end
 
-  class Entry
-    include DataMapper::Resource
-    include DataMapper::Types
+class Tag
+  include DataMapper::Resource
+  include DataMapper::Types
+  
+  property :id, Serial
+  property :title, String
 
-    property :id, Serial
-    property :url, String
-    property :via_url, String
-    property :summary, Text
-    property :body, Object #=>URLCacheのresponseみたいな使い方,
-    property :checked, Boolean, :default => false
-    property :created_at, DateTime, :default => Proc.new {|r,p| DateTime.now}
+  has n, :entries, :through => Resource
+  has n, :bundles, :through => Resource
+end
 
-    has n, :tags, :through => Resource
+# view, queue(host)
+class Bundle
+  include DataMapper::Resource
+  include DataMapper::Types
 
-    def should_crawl?
-      !self.checked || self.created_at.to_time < DateTime.now.to_time - 10 * 60
-    end
-  end
-
-  class Tag
-    include DataMapper::Resource
-    include DataMapper::Types
-    
-    property :id, Serial
-    property :title, String
-
-    has n, :entries, :through => Resource
-    has n, :bundles, :through => Resource
-  end
-
-  # view, queue(host)
-  class Bundle
-    include DataMapper::Resource
-    include DataMapper::Types
-
-    property :id, Serial
-    property :title, String
-    
-    has n, :tags, :through => Resource
-  end
-#end
+  property :id, Serial
+  property :title, String
+  
+  has n, :tags, :through => Resource
+end
 
 __END__
 
