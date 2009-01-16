@@ -21,7 +21,7 @@ require dir / 'processer' / 'downloader'
 require dir / 'processer' / 'webservices'
 
 module Fuc
-  VERSION = '0.0.2'
+  VERSION = '0.0.3'
 
   class << self
     cattr_accessor :work_dir
@@ -44,7 +44,7 @@ module Fuc
         self.url_queue.push(Entry.new(:url => url))
       elsif url.instance_of? Array then
         url.map {|u|
-          self.url_queue.push(Entry.new(:url => url))
+          self.url_queue.push(Entry.new(:url => u))
         }
       end
       
